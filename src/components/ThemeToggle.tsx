@@ -38,7 +38,18 @@ export function ThemeToggle({ onThemeToggle }: ThemeToggleProps) {
 
     // 先触发波纹动画
     if (onThemeToggle) {
-      onThemeToggle(event, nextTheme as 'light' | 'dark');
+      // 当切换到系统主题时，需要根据当前系统主题决定波纹颜色
+      let rippleTheme: 'light' | 'dark';
+      
+      if (nextTheme === 'system') {
+        // 如果要切换到系统主题，检查系统当前的主题偏好
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        rippleTheme = systemPrefersDark ? 'dark' : 'light';
+      } else {
+        rippleTheme = nextTheme as 'light' | 'dark';
+      }
+      
+      onThemeToggle(event, rippleTheme);
     }
 
     // 等待波纹动画开始扩散再切换主题（让波纹有时间展示）
