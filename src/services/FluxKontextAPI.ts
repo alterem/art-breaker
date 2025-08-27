@@ -3,10 +3,7 @@
  * 真实的图像生成API服务
  */
 
-export interface FluxKontextConfig {
-  baseUrl?: string;
-  timeout?: number;
-}
+import { SimpleCrypto } from '../utils/crypto';
 
 export interface EditImageRequest {
   inputImage: string;  // 输入图像URL
@@ -14,24 +11,6 @@ export interface EditImageRequest {
   model?: string;      // 模型名称
   enableTranslation?: boolean;
   outputFormat?: string;
-}
-
-export interface FileUploadResponse {
-  success: boolean;
-  code: number;
-  msg: string;
-  data: {
-    fileId: string;
-    fileName: string;
-    originalName: string;
-    fileSize: number;
-    mimeType: string;
-    uploadPath: string;
-    fileUrl: string;
-    downloadUrl: string;
-    uploadTime: string;
-    expiresAt: string;
-  };
 }
 
 export interface TaskResponse {
@@ -43,14 +22,23 @@ export interface TaskResponse {
 }
 
 export class FluxKontextAPI {
-  private apiKey: string;
-  private baseUrl: string;
-  private timeout: number;
+  private static readonly ENCRYPTED_API_KEY = 'UBBGV0IBWF8AE25CV1MTUBdnUQkHAlZBRABCXABfXBM=';
+  private static readonly baseUrl = 'https://api.kie.ai/api/v1/flux/kontext';
+  private static readonly  timeout: 300000;
 
-  constructor(config: FluxKontextConfig = {}) {
-    this.apiKey = '1b250d94ea1120a5c8c956730b09a49a'; // 内嵌API密钥
-    this.baseUrl = config.baseUrl || 'https://api.kie.ai/api/v1/flux/kontext';
-    this.timeout = config.timeout || 300000; // 5 minutes
+  /**
+   * 获取解密后的API密钥
+   */
+  private getApiKey(): string {
+    return SimpleCrypto.decrypt(FluxKontextAPI.ENCRYPTED_API_KEY);
+  }
+
+  private getBaseUrl(): string {
+    return FluxKontextAPI.baseUrl
+  }
+
+  private getTimeout(): number {
+    return FluxKontextAPI.timeout
   }
 
   /**
@@ -58,7 +46,7 @@ export class FluxKontextAPI {
    */
   async uploadImage(file: File): Promise<string> {
     const uploadUrl = 'https://kieai.redpandaai.co/api/file-stream-upload';
-    
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('uploadPath', 'images/user-uploads');
@@ -69,7 +57,7 @@ export class FluxKontextAPI {
     const response = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`
+        'Authorization': `Bearer ${this.getApiKey()}`
       },
       body: formData
     });
@@ -82,15 +70,15 @@ export class FluxKontextAPI {
 
     const result: any = await response.json();
     // console.log('Upload Response:', result);
-    
+
     if (!result.success || result.code !== 200) {
       throw new Error(`上传失败: ${result.msg || 'Unknown error'}`);
     }
-    
+
     // 根据实际API响应结构提取文件URL
     // 实际响应中文件URL在 data.downloadUrl 字段
     const fileUrl = result.data?.downloadUrl || result.data?.fileUrl || result.data?.url || result.fileUrl || result.url;
-    
+
     if (!fileUrl) {
       console.error('API响应结构:', JSON.stringify(result, null, 2));
       throw new Error('上传成功但未找到文件URL，请检查API响应格式');
@@ -112,7 +100,7 @@ export class FluxKontextAPI {
       outputFormat: request.outputFormat || 'jpeg'
     };
 
-    const generateUrl = `${this.baseUrl}/generate`;
+    const generateUrl = `${this.getBaseUrl()}/generate`;
     // console.log('API Generate URL:', generateUrl);
     // console.log('API Payload:', JSON.stringify(payload, null, 2));
 
@@ -120,7 +108,7 @@ export class FluxKontextAPI {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
+        'Authorization': `Bearer ${this.getApiKey()}`
       },
       body: JSON.stringify(payload)
     });
@@ -133,12 +121,12 @@ export class FluxKontextAPI {
 
     const result = await response.json();
     // console.log('API Generate Response:', result);
-    
+
     // 正确解析API响应结构
     if (result.code !== 200) {
       throw new Error(`Generation failed: ${result.msg || 'Unknown error'}`);
     }
-    
+
     // 检查data字段和taskId
     if (!result.data || !result.data.taskId) {
       throw new Error('Invalid API response: missing taskId in data field');
@@ -151,13 +139,13 @@ export class FluxKontextAPI {
    * 查询任务状态
    */
   async getTaskStatus(taskId: string): Promise<TaskResponse> {
-    const statusUrl = `${this.baseUrl}/record-info?taskId=${taskId}`;
+    const statusUrl = `${this.getBaseUrl()}/record-info?taskId=${taskId}`;
     // console.log('API Status URL:', statusUrl);
 
     const response = await fetch(statusUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`
+        'Authorization': `Bearer ${this.getApiKey()}`
       }
     });
 
@@ -169,12 +157,12 @@ export class FluxKontextAPI {
 
     const result = await response.json();
     // console.log('API Status Response:', result);
-    
+
     // 正确解析API响应结构
     if (result.code !== 200) {
       throw new Error(`Status query failed: ${result.msg || 'Unknown error'}`);
     }
-    
+
     // 返回data字段中的状态信息
     if (!result.data) {
       throw new Error('Invalid API response: missing data field');
@@ -187,18 +175,18 @@ export class FluxKontextAPI {
    * 轮询等待任务完成
    */
   async waitForCompletion(
-    taskId: string, 
+    taskId: string,
     onProgress?: (status: TaskResponse) => void
   ): Promise<TaskResponse> {
     const startTime = Date.now();
     const pollInterval = 3000; // 3秒轮询一次
-    // console.log('Starting task polling for taskId:', taskId);
+    console.log('Starting task polling for taskId:', taskId);
 
-    while (Date.now() - startTime < this.timeout) {
+    while (Date.now() - startTime < this.getTimeout()) {
       try {
         const statusData = await this.getTaskStatus(taskId);
         // console.log('Polling status data:', statusData);
-        
+
         // 构建标准的TaskResponse对象
         const status: TaskResponse = {
           taskId: (statusData as any).taskId || taskId,
@@ -207,9 +195,9 @@ export class FluxKontextAPI {
           error: (statusData as any).errorMessage || (statusData as any).msg,
           progress: (statusData as any).progress
         };
-        
+
         // console.log('Mapped status:', status);
-        
+
         // 回调进度更新
         if (onProgress) {
           onProgress(status);
@@ -224,7 +212,7 @@ export class FluxKontextAPI {
           // console.log('Task completed successfully:', status.imageUrl);
           return status;
         }
-        
+
         if (status.status === 'failed') {
           console.error('Task failed:', statusData);
           const failureMessage = status.error || '生成失败，请尝试调整您的提示词后重试。可能是提示词内容不合适或过于复杂。';
@@ -254,7 +242,7 @@ export class FluxKontextAPI {
    */
   private mapApiStatusBySuccessFlag(successFlag: any): 'pending' | 'processing' | 'completed' | 'failed' {
     // console.log('Mapping API successFlag:', successFlag);
-    
+
     // successFlag = 1 表示成功完成，0 表示还在处理中，3 表示请求失败
     if (successFlag === 1) {
       return 'completed';
@@ -277,33 +265,10 @@ export class FluxKontextAPI {
   ): Promise<string> {
     // 1. 提交任务
     const taskId = await this.editImage(request);
-    
+
     // 2. 等待完成
     const result = await this.waitForCompletion(taskId, onProgress);
-    
+
     return result.imageUrl!;
-  }
-}
-
-/**
- * API密钥管理（已禁用，使用内嵌密钥）
- */
-export class ApiKeyManager {
-  private static readonly STORAGE_KEY = 'flux_kontext_api_key';
-
-  static getApiKey(): string | null {
-    return '1b250d94ea1120a5c8c956730b09a49a'; // 返回内嵌密钥
-  }
-
-  static setApiKey(apiKey: string): void {
-    // 不再存储，始终使用内嵌密钥
-  }
-
-  static clearApiKey(): void {
-    // 不再清除，始终使用内嵌密钥
-  }
-
-  static hasApiKey(): boolean {
-    return true; // 始终返回true，因为有内嵌密钥
   }
 }
