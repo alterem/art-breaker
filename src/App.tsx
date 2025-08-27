@@ -3,6 +3,7 @@ import { PaintingGallery } from './components/PaintingGallery';
 import { CreativeInput } from './components/CreativeInput';
 import { GenerationResultComponent } from './components/GenerationResult';
 import { ThemeToggle } from './components/ThemeToggle';
+import { ToastContainer, useToast } from './components/Toast';
 import { useImageGeneration } from './hooks/useImageGeneration';
 import { useImageUpload, UploadedImage } from './hooks/useImageUpload';
 import { useThemeRipple } from './hooks/useThemeRipple';
@@ -18,6 +19,7 @@ function App() {
   const [prompt, setPrompt] = useState('');
   const { theme } = useTheme();
   const { createRipple, RippleContainer } = useThemeRipple();
+  const { messages, removeToast, showSuccess, showError } = useToast();
 
   const {
     generateImage,
@@ -128,6 +130,20 @@ function App() {
               isGenerating={isGenerating}
               error={error}
               status={status}
+              onDownload={(success) => {
+                if (success) {
+                  showSuccess('下载成功', '图片已保存到您的设备');
+                } else {
+                  showError('下载失败', '请检查网络连接或稍后重试');
+                }
+              }}
+              onShare={(success) => {
+                if (success) {
+                  showSuccess('复制成功', '分享链接已复制到剪贴板');
+                } else {
+                  showError('复制失败', '请手动复制链接或检查浏览器设置');
+                }
+              }}
               onReset={reset}
             />
           </div>
@@ -163,6 +179,9 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Toast 容器 */}
+      <ToastContainer messages={messages} onRemove={removeToast} />
 
       {/* 简化的底部 */}
       <footer className="mt-2 py-6 border-t border-gray-200 dark:border-gray-800">

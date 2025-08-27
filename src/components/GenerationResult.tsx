@@ -7,8 +7,8 @@ interface GenerationResultProps {
   isGenerating: boolean;
   error: string | null;
   status: GenerationStatus;
-  onDownload?: () => void;
-  onShare?: () => void;
+  onDownload?: (success: boolean) => void;
+  onShare?: (success: boolean) => void;
   onReset?: () => void;
 }
 
@@ -64,25 +64,104 @@ export const GenerationResultComponent: React.FC<GenerationResultProps> = ({
     };
   }, [isImageModalOpen]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (result && onDownload) {
-      const link = document.createElement('a');
-      link.href = result.imageUrl;
-      link.download = `artbreaker-creation-${result.timestamp}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      onDownload();
+      try {
+        // 创建一个 canvas 来绘制图片，然后下载
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // 允许跨域
+        
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            
+            ctx?.drawImage(img, 0, 0);
+            
+            // 将 canvas 转换为 blob 并下载
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `artbreaker-creation-${result.timestamp}.jpg`;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                onDownload(true);
+              } else {
+                onDownload(false);
+              }
+            }, 'image/jpeg', 0.9);
+          } catch (canvasError) {
+            console.error('Canvas download failed:', canvasError);
+            // 降级到直接链接方式
+            const link = document.createElement('a');
+            link.href = result.imageUrl;
+            link.download = `artbreaker-creation-${result.timestamp}.jpg`;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            onDownload(false);
+          }
+        };
+        
+        img.onerror = () => {
+          console.error('Image load failed, using direct link');
+          // 如果图片加载失败，使用直接链接
+          const link = document.createElement('a');
+          link.href = result.imageUrl;
+          link.download = `artbreaker-creation-${result.timestamp}.jpg`;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          onDownload(false);
+        };
+        
+        img.src = result.imageUrl;
+      } catch (error) {
+        console.error('Download setup failed:', error);
+        onDownload(false);
+      }
     }
   };
 
-  const handleShare = () => {
-    if (onShare) {
+  const handleShare = async () => {
+    if (onShare && result) {
       const text = "🎨 我在 ArtBreaker 上创作了一幅令人惊叹的艺术杰作！";
-      const url = window.location.href;
-      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-      window.open(twitterUrl, '_blank');
-      onShare();
+      const shareText = `${text} ${result.imageUrl}`;
+      
+      try {
+        await navigator.clipboard.writeText(shareText);
+        onShare(true);
+      } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        // 降级到手动选择文本
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = shareText;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          const success = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          onShare(success);
+        } catch (fallbackErr) {
+          console.error('Fallback copy also failed:', fallbackErr);
+          onShare(false);
+        }
+      }
     }
   };
 
@@ -260,12 +339,12 @@ export const GenerationResultComponent: React.FC<GenerationResultProps> = ({
               
               <button
                 onClick={handleShare}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
-                分享
+                复制链接
               </button>
             </div>
             
