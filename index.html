@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ArtBreaker - Remix History. Create a Masterpiece.</title>
+    <meta name="description" content="基于世界名画的AI艺术创作平台，用创意指令重新诠释经典艺术作品" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // 防止闪烁：根据用户偏好或存储的主题设置
+      (function() {
+        try {
+          const stored = localStorage.getItem('theme');
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          
+          let shouldBeDark = false;
+          if (stored === 'dark') {
+            shouldBeDark = true;
+          } else if (stored === 'light') {
+            shouldBeDark = false;
+          } else if (stored === 'system' || !stored) {
+            shouldBeDark = prefersDark;
+          }
+          
+          document.documentElement.classList.toggle('dark', shouldBeDark);
+        } catch (e) {
+          // 如果出错，默认根据系统偏好
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', prefersDark);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
